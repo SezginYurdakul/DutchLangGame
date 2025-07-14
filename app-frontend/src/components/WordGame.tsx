@@ -29,24 +29,21 @@ function getDistractors(
 }
 
 // Speak text in a given language, with slower rate for Dutch
-function speak(text: string, lang: string) {
-  if (!window.speechSynthesis) return;
-  const utter = new window.SpeechSynthesisUtterance(text);
-  utter.lang = lang;
-  // Set a slower rate for Dutch to avoid skipping syllables
-  if (lang === "nl-NL") {
-    utter.rate = 0.9; // You can try 0.7 or 0.9 if needed
-  } else {
-    utter.rate = 1;
-  }
-  // Try to select a Dutch voice if available
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    const match = voices.find(v => v.lang === lang);
-    if (match) utter.voice = match;
-  }
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utter);
+function speakAsync(text: string, lang: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) return resolve();
+    const utter = new window.SpeechSynthesisUtterance(text);
+    utter.lang = lang;
+    utter.rate = lang === "nl-NL" ? 0.9 : 1;
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const match = voices.find(v => v.lang === lang);
+      if (match) utter.voice = match;
+    }
+    utter.onend = () => setTimeout(resolve, 200); // Wait a bit before resolving
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  });
 }
 
 export default function WordGame() {
@@ -114,36 +111,37 @@ export default function WordGame() {
   );
 
   // Speak the question when it changes
-  useEffect(() => {
-    if (!word || screen !== "quiz") return;
+useEffect(() => {
+  if (!word || screen !== "quiz") return;
+  (async () => {
     if (isDutchToEnglish) {
-      speak(question, "nl-NL");
+      await speakAsync(question, "nl-NL");
     } else {
-      speak(question, "en-US");
+      await speakAsync(question, "en-US");
     }
-    // eslint-disable-next-line
-  }, [question, isDutchToEnglish, screen]);
+  })();
+  // eslint-disable-next-line
+}, [question, isDutchToEnglish, screen]);
 
   // Answer check and speak the answer
-  function handleAnswer(option: string) {
-    if (!word) return;
-    // Speak the selected answer in the answer's language
-    if (isDutchToEnglish) {
-      speak(option, "en-US");
-    } else {
-      speak(option, "nl-NL");
-    }
-    const isCorrect = option === correct;
-    setScore((s) => ({
-      correct: s.correct + (isCorrect ? 1 : 0),
-      wrong: s.wrong + (isCorrect ? 0 : 1),
-    }));
-    setAnswers((a) => [...a, option]);
-    setTimeout(() => {
-      if (current + 1 >= quizList.length) setShowResult(true);
-      else setCurrent((c) => c + 1);
-    }, 1000);
+async function handleAnswer(option: string) {
+  if (!word) return;
+  if (isDutchToEnglish) {
+    await speakAsync(option, "en-US");
+  } else {
+    await speakAsync(option, "nl-NL");
   }
+  const isCorrect = option === correct;
+  setScore((s) => ({
+    correct: s.correct + (isCorrect ? 1 : 0),
+    wrong: s.wrong + (isCorrect ? 0 : 1),
+  }));
+  setAnswers((a) => [...a, option]);
+  setTimeout(() => {
+    if (current + 1 >= quizList.length) setShowResult(true);
+    else setCurrent((c) => c + 1);
+  }, 2000); 
+}
 
   // Result screen: Automatically opens and saves history when the game ends
   useEffect(() => {
